@@ -204,6 +204,11 @@
   to { transform: rotate(360deg) translateX(var(--orbit-radius, 100px)) rotate(-360deg); }
 }
 
+@keyframes scan-sweep {
+  0% { top: -20%; }
+  100% { top: 110%; }
+}
+
 .reactor-core {
   background: var(--gradient-reactor);
   box-shadow: var(--shadow-reactor);

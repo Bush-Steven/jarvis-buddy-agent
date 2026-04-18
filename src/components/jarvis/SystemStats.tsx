@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { HudPanel } from "./HudFrame";
 
 function useTime() {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -55,8 +56,8 @@ export function SystemStats() {
       <div className="space-y-3 text-xs">
         <div className="flex items-baseline justify-between">
           <span className="text-muted-foreground">CHRONO</span>
-          <span className="hud-text font-mono">
-            {now.toLocaleTimeString("en-GB", { hour12: false })}
+          <span className="hud-text font-mono" suppressHydrationWarning>
+            {now ? now.toLocaleTimeString("en-GB", { hour12: false }) : "--:--:--"}
           </span>
         </div>
         <div className="space-y-1">
