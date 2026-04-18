@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { jarvisChat } from "@/utils/jarvis.functions";
 import { useJarvisVoice } from "@/hooks/useJarvisVoice";
-import { ArcReactor } from "./ArcReactor";
+import { JarvisFace } from "./JarvisFace";
 import { HudCorners, HudPanel } from "./HudFrame";
 import { SystemStats } from "./SystemStats";
 import { Transcript, type ChatMessage } from "./Transcript";
@@ -131,12 +131,22 @@ export function JarvisInterface() {
           </HudPanel>
         </div>
 
-        {/* Center: reactor */}
-        <div className="flex flex-col items-center justify-center min-h-[420px] gap-12 py-8">
-          <ArcReactor state={reactorState} size={300} />
+        {/* Center: face */}
+        <div className="flex flex-col items-center justify-center min-h-[460px] gap-14 py-8">
+          <JarvisFace
+            state={reactorState}
+            size={340}
+            onActivate={voice.supported ? toggleListen : undefined}
+          />
           <div className="text-center max-w-md">
             <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">
-              Awaiting your command
+              {voice.listening
+                ? "Speak — I'm listening"
+                : thinking
+                  ? "Computing response"
+                  : speaking
+                    ? "Transmitting"
+                    : "Tap the face or type below"}
             </p>
             <p className="mt-2 text-sm text-foreground/70">
               "At your service, sir."
