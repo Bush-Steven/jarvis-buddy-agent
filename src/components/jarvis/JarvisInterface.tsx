@@ -7,6 +7,7 @@ import { HudCorners, HudPanel } from "./HudFrame";
 import { SystemStats } from "./SystemStats";
 import { Transcript, type ChatMessage } from "./Transcript";
 import { InputBar } from "./InputBar";
+import { WorldNewsMap } from "./WorldNewsMap";
 
 const SUGGESTIONS = [
   "Status report.",
@@ -172,14 +173,23 @@ export function JarvisInterface() {
               </div>
             </dl>
           </HudPanel>
-          <HudPanel title="Notice">
+          <HudPanel title="System Link">
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Direct hardware control is offline in this build. JARVIS responds
-              with intelligence and counsel only.
+              Direct OS control pending desktop deployment. Cloud intelligence
+              modules online: news, search, analysis.
             </p>
           </HudPanel>
         </div>
       </div>
+
+      {/* World news map */}
+      <section className="relative z-10 mx-auto max-w-7xl px-6 pb-6">
+        <WorldNewsMap />
+      </section>
+
+      <div className="hidden">{/* spacer */}</div>
+      <div>
+        <div className="hidden" />
 
       {/* Bottom: transcript + input */}
       <section className="relative z-10 mx-auto max-w-5xl space-y-3 px-6 pb-8">
