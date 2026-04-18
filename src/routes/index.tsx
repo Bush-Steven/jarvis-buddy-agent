@@ -1,26 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { JarvisInterface } from "@/components/jarvis/JarvisInterface";
 
 export const Route = createFileRoute("/")({
   component: Index,
+  head: () => ({
+    meta: [
+      { title: "JARVIS — Personal AI Assistant" },
+      {
+        name: "description",
+        content:
+          "An Iron Man-style JARVIS interface. Voice-driven AI assistant with arc reactor HUD.",
+      },
+      { property: "og:title", content: "JARVIS — Personal AI Assistant" },
+      {
+        property: "og:description",
+        content:
+          "Tony Stark-inspired voice AI with a holographic heads-up display.",
+      },
+    ],
+  }),
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
-
 function Index() {
-  return <PlaceholderIndex />;
+  return <JarvisInterface />;
 }
