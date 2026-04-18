@@ -187,10 +187,6 @@ export function JarvisInterface() {
         <WorldNewsMap />
       </section>
 
-      <div className="hidden">{/* spacer */}</div>
-      <div>
-        <div className="hidden" />
-
       {/* Bottom: transcript + input */}
       <section className="relative z-10 mx-auto max-w-5xl space-y-3 px-6 pb-8">
         <Transcript messages={messages} thinking={thinking} />
