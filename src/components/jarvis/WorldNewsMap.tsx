@@ -131,7 +131,7 @@ function MapInner({
         threats.map((t) => {
           const color = SEVERITY_COLOR[t.severity];
           return (
-            <span key={t.id}>
+            <FragmentGroup key={t.id}>
               <Polyline
                 positions={[
                   [t.origin.lat, t.origin.lng],
@@ -187,7 +187,7 @@ function MapInner({
                   </div>
                 </Popup>
               </CircleMarker>
-            </span>
+            </FragmentGroup>
           );
         })}
     </MapContainer>
