@@ -212,7 +212,7 @@ export function WorldNewsMap() {
     try {
       const [newsRes, threatRes] = await Promise.all([
         fetchNews({ data: { max: 10 } }),
-        fetchThreats({ data: undefined as never }),
+        fetchThreats(),
       ]);
       setArticles(newsRes.articles);
       setThreats(threatRes.threats);
