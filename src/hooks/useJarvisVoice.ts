@@ -1,4 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const VOICE_STORAGE_KEY = "jarvis.voice.uri.v1";
+
+// Hints for "premium / human-clear" voices across OS/browsers
+const PREMIUM_HINTS =
+  /(neural|enhanced|premium|natural|online|google|microsoft|siri|eloquence)/i;
+const BRITISH_NAME_HINTS =
+  /(uk|british|england|daniel|arthur|oliver|george|ryan|libby|sonia|kate|serena|martha|hazel|mia)/i;
+
+function scoreVoice(v: SpeechSynthesisVoice): number {
+  let score = 0;
+  const lang = (v.lang || "").toLowerCase();
+  const name = v.name || "";
+  if (lang.startsWith("en-gb")) score += 100;
+  else if (lang.startsWith("en")) score += 40;
+  if (BRITISH_NAME_HINTS.test(name)) score += 60;
+  if (PREMIUM_HINTS.test(name)) score += 50;
+  // Male British JARVIS-ish names get a small bump
+  if (/(daniel|arthur|oliver|george|ryan)/i.test(name)) score += 20;
+  if (v.localService) score += 5;
+  if (v.default) score += 2;
+  return score;
+}
 
 // Minimal Web Speech API typings (avoid using `any`)
 interface SRAlternative {
