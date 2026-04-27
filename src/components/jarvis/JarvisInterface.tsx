@@ -9,6 +9,19 @@ import { Transcript, type ChatMessage } from "./Transcript";
 import { InputBar } from "./InputBar";
 import { WorldNewsMap } from "./WorldNewsMap";
 import { PermissionsLock, usePermissions } from "./PermissionsLock";
+import { AuditLogPanel, useAuditLog } from "./AuditLog";
+
+const PC_CONTROL_PATTERNS = [
+  /\b(open|launch|run|execute|kill|close|quit)\b.*\b(app|application|program|window|browser|terminal|file|folder)\b/i,
+  /\b(shutdown|restart|reboot|sleep|lock screen|log ?out)\b/i,
+  /\b(volume|brightness|wifi|bluetooth)\s+(up|down|on|off|to)\b/i,
+  /\b(type|click|press|move (the )?(mouse|cursor))\b/i,
+  /\b(create|delete|move|copy|rename)\s+(file|folder|directory)\b/i,
+];
+
+function isPcControlIntent(text: string) {
+  return PC_CONTROL_PATTERNS.some((re) => re.test(text));
+}
 
 const SUGGESTIONS = [
   "Status report.",
@@ -21,6 +34,23 @@ export function JarvisInterface() {
   const chat = useServerFn(jarvisChat);
   const voice = useJarvisVoice();
   const { perms, loaded, grant, revoke } = usePermissions();
+  const audit = useAuditLog();
+
+  const handleGrant = useCallback(
+    (allowPcControl: boolean, requireConfirm: boolean) => {
+      grant(allowPcControl, requireConfirm);
+      audit.log(
+        "unlock",
+        `Authorized — PC control ${allowPcControl ? "ON" : "OFF"}, confirm-each ${requireConfirm ? "ON" : "OFF"}.`
+      );
+    },
+    [grant, audit]
+  );
+
+  const handleRevoke = useCallback(() => {
+    audit.log("lock", "Session locked by operator. Permissions revoked.");
+    revoke();
+  }, [revoke, audit]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState(false);
@@ -33,6 +63,32 @@ export function JarvisInterface() {
 
   const send = useCallback(
     async (text: string) => {
+      // PC-control gating + audit
+      if (isPcControlIntent(text)) {
+        audit.log("command_requested", `Detected PC directive: "${text}"`);
+        if (!perms?.allowPcControl) {
+          audit.log(
+            "command_blocked",
+            `Blocked — PC control disabled in permissions: "${text}"`
+          );
+          setErrorMsg(
+            "PC control is currently disabled, sir. Re-authorize via the lock screen to permit."
+          );
+          return;
+        }
+        if (perms.requireConfirm) {
+          const ok = window.confirm(
+            `JARVIS requests authorization to execute:\n\n"${text}"\n\nProceed?`
+          );
+          if (!ok) {
+            audit.log("command_blocked", `Operator denied: "${text}"`);
+            setErrorMsg("Directive cancelled by operator.");
+            return;
+          }
+        }
+        audit.log("command_confirmed", `Cleared for execution: "${text}"`);
+      }
+
       const userMsg: ChatMessage = { role: "user", content: text };
       const next = [...messages, userMsg];
       setMessages(next);
@@ -62,7 +118,7 @@ export function JarvisInterface() {
         setThinking(false);
       }
     },
-    [chat, messages, voice, voiceReplies]
+    [chat, messages, voice, voiceReplies, perms, audit]
   );
 
   // Auto-submit when voice listening ends with a transcript
@@ -83,7 +139,7 @@ export function JarvisInterface() {
   };
 
   if (loaded && !perms) {
-    return <PermissionsLock onUnlock={grant} />;
+    return <PermissionsLock onUnlock={handleGrant} />;
   }
 
   return (
@@ -115,7 +171,7 @@ export function JarvisInterface() {
             Voice Reply: {voiceReplies ? "ON" : "OFF"}
           </button>
           <button
-            onClick={revoke}
+            onClick={handleRevoke}
             title="Lock JARVIS and revoke permissions"
             className="text-[10px] font-bold uppercase tracking-[0.25em] border border-[var(--hud-red)] rounded px-3 py-1.5 text-[var(--hud-red)] hover:bg-[oklch(0.30_0.08_25)/0.3] transition-colors"
           >
@@ -194,6 +250,7 @@ export function JarvisInterface() {
               modules online: news, search, analysis.
             </p>
           </HudPanel>
+          <AuditLogPanel entries={audit.entries} onClear={audit.clear} />
         </div>
       </div>
 
