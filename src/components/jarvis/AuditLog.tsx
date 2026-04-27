@@ -105,22 +105,37 @@ export function AuditLogPanel({
   entries: AuditEntry[];
   onClear: () => void;
 }) {
+  const last = entries[0];
+  const lastLabel = last
+    ? `Last: ${formatTime(last.timestamp)} · ${TYPE_META[last.type].label}`
+    : "Last: —";
+
   return (
     <div className="hud-panel rounded-md border p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div
-            className="h-2 w-2 rounded-full"
-            style={{
-              background: "var(--hud-cyan-bright)",
-              boxShadow: "0 0 8px var(--hud-cyan-bright)",
-            }}
-          />
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] hud-text">
-            Audit Log
-          </h3>
-          <span className="text-[10px] text-muted-foreground">
-            ({entries.length})
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <div
+              className="h-2 w-2 rounded-full"
+              style={{
+                background: last
+                  ? TYPE_META[last.type].color
+                  : "var(--hud-cyan-bright)",
+                boxShadow: `0 0 8px ${last ? TYPE_META[last.type].color : "var(--hud-cyan-bright)"}`,
+              }}
+            />
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] hud-text">
+              Audit Log
+            </h3>
+            <span className="text-[10px] text-muted-foreground">
+              ({entries.length})
+            </span>
+          </div>
+          <span
+            className="pl-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
+            title={last ? new Date(last.timestamp).toLocaleString() : undefined}
+          >
+            {lastLabel}
           </span>
         </div>
         <button
