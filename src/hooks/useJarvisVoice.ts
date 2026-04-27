@@ -1,4 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const VOICE_STORAGE_KEY = "jarvis.voice.uri.v1";
+
+// Hints for "premium / human-clear" voices across OS/browsers
+const PREMIUM_HINTS =
+  /(neural|enhanced|premium|natural|online|google|microsoft|siri|eloquence)/i;
+const BRITISH_NAME_HINTS =
+  /(uk|british|england|daniel|arthur|oliver|george|ryan|libby|sonia|kate|serena|martha|hazel|mia)/i;
+
+function scoreVoice(v: SpeechSynthesisVoice): number {
+  let score = 0;
+  const lang = (v.lang || "").toLowerCase();
+  const name = v.name || "";
+  if (lang.startsWith("en-gb")) score += 100;
+  else if (lang.startsWith("en")) score += 40;
+  if (BRITISH_NAME_HINTS.test(name)) score += 60;
+  if (PREMIUM_HINTS.test(name)) score += 50;
+  // Male British JARVIS-ish names get a small bump
+  if (/(daniel|arthur|oliver|george|ryan)/i.test(name)) score += 20;
+  if (v.localService) score += 5;
+  if (v.default) score += 2;
+  return score;
+}
 
 // Minimal Web Speech API typings (avoid using `any`)
 interface SRAlternative {
@@ -94,27 +117,90 @@ export function useJarvisVoice() {
     setListening(false);
   }, []);
 
-  const speak = useCallback((text: string) => {
+  // Voice catalog + selection
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceURI, setVoiceURI] = useState<string | null>(null);
+
+  useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     const synth = window.speechSynthesis;
-    synth.cancel();
-    const clean = text
-      .replace(/```[\s\S]*?```/g, " code block. ")
-      .replace(/[*_#`>]/g, "")
-      .replace(/\[(.*?)\]\(.*?\)/g, "$1")
-      .slice(0, 600);
-    const u = new SpeechSynthesisUtterance(clean);
-    const voices = synth.getVoices();
-    const preferred =
-      voices.find((v) => /UK|British|Daniel|Arthur|Oliver/i.test(v.name)) ??
-      voices.find((v) => v.lang?.startsWith("en-GB")) ??
-      voices[0];
-    if (preferred) u.voice = preferred;
-    u.rate = 1.02;
-    u.pitch = 0.9;
-    synth.speak(u);
-    return u;
+
+    const load = () => {
+      const all = synth.getVoices();
+      // English-only, sorted best-first
+      const filtered = all
+        .filter((v) => (v.lang || "").toLowerCase().startsWith("en"))
+        .sort((a, b) => scoreVoice(b) - scoreVoice(a));
+      setVoices(filtered);
+
+      setVoiceURI((current) => {
+        if (current && filtered.some((v) => v.voiceURI === current)) return current;
+        const stored =
+          typeof localStorage !== "undefined"
+            ? localStorage.getItem(VOICE_STORAGE_KEY)
+            : null;
+        if (stored && filtered.some((v) => v.voiceURI === stored)) return stored;
+        return filtered[0]?.voiceURI ?? null;
+      });
+    };
+
+    load();
+    synth.onvoiceschanged = load;
+    return () => {
+      synth.onvoiceschanged = null;
+    };
   }, []);
 
-  return { supported, listening, liveTranscript, start, stop, speak };
+  const selectVoice = useCallback((uri: string) => {
+    setVoiceURI(uri);
+    try {
+      localStorage.setItem(VOICE_STORAGE_KEY, uri);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const selectedVoice = useMemo(
+    () => voices.find((v) => v.voiceURI === voiceURI) ?? null,
+    [voices, voiceURI]
+  );
+
+  const speak = useCallback(
+    (text: string) => {
+      if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+      const synth = window.speechSynthesis;
+      synth.cancel();
+      const clean = text
+        .replace(/```[\s\S]*?```/g, " code block. ")
+        .replace(/[*_#`>]/g, "")
+        .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+        .slice(0, 600);
+      const u = new SpeechSynthesisUtterance(clean);
+      const voice =
+        selectedVoice ??
+        synth.getVoices().find((v) => v.lang?.toLowerCase().startsWith("en-gb")) ??
+        synth.getVoices()[0];
+      if (voice) {
+        u.voice = voice;
+        u.lang = voice.lang;
+      }
+      u.rate = 1.02;
+      u.pitch = 0.9;
+      synth.speak(u);
+      return u;
+    },
+    [selectedVoice]
+  );
+
+  return {
+    supported,
+    listening,
+    liveTranscript,
+    start,
+    stop,
+    speak,
+    voices,
+    selectedVoice,
+    selectVoice,
+  };
 }
