@@ -164,6 +164,20 @@ export function JarvisInterface() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {voice.voices.length > 0 && (
+            <select
+              value={voice.selectedVoice?.voiceURI ?? ""}
+              onChange={(e) => voice.selectVoice(e.target.value)}
+              title="Select voice"
+              className="text-[10px] font-bold uppercase tracking-[0.2em] hud-text bg-transparent border border-[var(--hud-cyan)] rounded px-2 py-1.5 max-w-[220px] hover:bg-[oklch(0.30_0.06_235)/0.4] transition-colors"
+            >
+              {voice.voices.map((v) => (
+                <option key={v.voiceURI} value={v.voiceURI} className="bg-background text-foreground">
+                  {v.name} · {v.lang}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             onClick={() => setVoiceReplies((v) => !v)}
             className="text-[10px] font-bold uppercase tracking-[0.25em] hud-text border border-[var(--hud-cyan)] rounded px-3 py-1.5 hover:bg-[oklch(0.30_0.06_235)/0.4] transition-colors"
