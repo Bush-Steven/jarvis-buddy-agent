@@ -8,6 +8,7 @@ import { SystemStats } from "./SystemStats";
 import { Transcript, type ChatMessage } from "./Transcript";
 import { InputBar } from "./InputBar";
 import { WorldNewsMap } from "./WorldNewsMap";
+import { PermissionsLock, usePermissions } from "./PermissionsLock";
 
 const SUGGESTIONS = [
   "Status report.",
@@ -19,6 +20,7 @@ const SUGGESTIONS = [
 export function JarvisInterface() {
   const chat = useServerFn(jarvisChat);
   const voice = useJarvisVoice();
+  const { perms, loaded, grant, revoke } = usePermissions();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thinking, setThinking] = useState(false);
@@ -80,6 +82,10 @@ export function JarvisInterface() {
     else voice.start();
   };
 
+  if (loaded && !perms) {
+    return <PermissionsLock onUnlock={grant} />;
+  }
+
   return (
     <main className="scanlines relative min-h-screen w-full overflow-hidden">
       <HudCorners />
@@ -101,12 +107,21 @@ export function JarvisInterface() {
             Mark VII · Stark Industries
           </span>
         </div>
-        <button
-          onClick={() => setVoiceReplies((v) => !v)}
-          className="text-[10px] font-bold uppercase tracking-[0.25em] hud-text border border-[var(--hud-cyan)] rounded px-3 py-1.5 hover:bg-[oklch(0.30_0.06_235)/0.4] transition-colors"
-        >
-          Voice Reply: {voiceReplies ? "ON" : "OFF"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setVoiceReplies((v) => !v)}
+            className="text-[10px] font-bold uppercase tracking-[0.25em] hud-text border border-[var(--hud-cyan)] rounded px-3 py-1.5 hover:bg-[oklch(0.30_0.06_235)/0.4] transition-colors"
+          >
+            Voice Reply: {voiceReplies ? "ON" : "OFF"}
+          </button>
+          <button
+            onClick={revoke}
+            title="Lock JARVIS and revoke permissions"
+            className="text-[10px] font-bold uppercase tracking-[0.25em] border border-[var(--hud-red)] rounded px-3 py-1.5 text-[var(--hud-red)] hover:bg-[oklch(0.30_0.08_25)/0.3] transition-colors"
+          >
+            🔒 Lock
+          </button>
+        </div>
       </header>
 
       {/* Main grid */}
