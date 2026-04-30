@@ -26,7 +26,7 @@ export function JarvisFace({ state, size = 320, onActivate }: Props) {
     const r = el.getBoundingClientRect();
     const px = (e.clientX - r.left) / r.width - 0.5;
     const py = (e.clientY - r.top) / r.height - 0.5;
-    setTilt({ x: -py * 12, y: px * 12 });
+    setTilt({ x: -py * 24, y: px * 24 });
   };
 
   const onLeave = () => {
