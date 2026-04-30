@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import maskImg from "@/assets/jarvis-mask.jpg";
+import maskImg from "@/assets/cybercrow.png";
 
 type Props = {
   state: "idle" | "listening" | "thinking" | "speaking";
