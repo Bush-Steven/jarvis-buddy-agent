@@ -94,65 +94,79 @@ export function JarvisFace({ state, size = 320, onActivate }: Props) {
         onMouseEnter={() => setHover(true)}
         onMouseLeave={onLeave}
         onMouseMove={onMove}
-        className="relative rounded-full overflow-hidden focus:outline-none focus:ring-2 focus:ring-[var(--hud-cyan-bright)] cursor-pointer"
+        className="relative rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--hud-cyan-bright)] cursor-pointer"
         style={{
           width: size * 0.78,
           height: size * 0.78,
-          transform: `perspective(800px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${pulse ? 1.04 : hover ? 1.02 : 1})`,
+          transformStyle: "preserve-3d",
+          transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${pulse ? 1.06 : hover ? 1.03 : 1})`,
           transition: "transform 200ms ease-out",
-          boxShadow: `0 0 ${40 * intensity}px ${aura}, 0 0 ${90 * intensity}px ${aura}, inset 0 0 30px oklch(0.10 0.03 240)`,
-          background: "var(--hud-deep)",
+          boxShadow: `0 0 ${40 * intensity}px ${aura}, 0 0 ${90 * intensity}px ${aura}, 0 30px 60px -10px oklch(0.05 0.05 240 / 0.8)`,
+          background: "radial-gradient(circle at 50% 40%, oklch(0.18 0.05 240) 0%, oklch(0.06 0.03 240) 75%)",
+          borderRadius: "50%",
+          overflow: "hidden",
         }}
         aria-pressed={state === "listening"}
       >
-        <img
-          src={maskImg}
-          alt="JARVIS — neural interface"
-          draggable={false}
-          className="h-full w-full object-cover"
+        {/* Depth backdrop layer (pushed back in 3D) */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full"
           style={{
-            filter:
-              state === "thinking"
-                ? "hue-rotate(20deg) brightness(1.15) contrast(1.1) saturate(1.2)"
-                : state === "speaking"
-                  ? "brightness(1.3) contrast(1.15) saturate(1.3)"
-                  : state === "listening"
-                    ? "brightness(1.15) saturate(1.2)"
-                    : "brightness(1) saturate(1)",
-            transition: "filter 400ms ease",
+            transform: "translateZ(-40px) scale(0.9)",
+            background:
+              "radial-gradient(circle at 50% 50%, var(--hud-cyan) 0%, transparent 60%)",
+            opacity: 0.35,
+            filter: "blur(20px)",
           }}
         />
 
-        {/* Eye glow overlay — pulses with state */}
+        {/* Main logo — lifted forward in 3D space */}
+        <img
+          src={maskImg}
+          alt="CyberCrow — neural interface"
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-contain"
+          style={{
+            transform: `translateZ(40px) scale(${hover ? 1.05 : 1})`,
+            transition: "transform 300ms ease-out, filter 400ms ease",
+            filter:
+              state === "thinking"
+                ? "drop-shadow(0 12px 24px oklch(0.05 0.05 240 / 0.9)) hue-rotate(15deg) brightness(1.15) contrast(1.1) saturate(1.3)"
+                : state === "speaking"
+                  ? "drop-shadow(0 12px 24px oklch(0.05 0.05 240 / 0.9)) brightness(1.35) contrast(1.15) saturate(1.4)"
+                  : state === "listening"
+                    ? "drop-shadow(0 12px 24px oklch(0.05 0.05 240 / 0.9)) brightness(1.2) saturate(1.25)"
+                    : "drop-shadow(0 10px 20px oklch(0.05 0.05 240 / 0.85)) brightness(1.05)",
+          }}
+        />
+
+        {/* Crow eye glow — positioned over the actual eye */}
         <span
           aria-hidden
           className="pointer-events-none absolute"
           style={{
-            top: "38%",
-            left: "26%",
-            width: "16%",
-            height: "10%",
+            top: "33%",
+            left: "52%",
+            width: "10%",
+            height: "7%",
             borderRadius: "50%",
+            transform: "translateZ(60px)",
             background: "radial-gradient(circle, var(--hud-cyan-bright) 0%, transparent 70%)",
-            filter: "blur(6px)",
-            opacity: state === "idle" ? 0.55 : 0.95,
+            filter: "blur(4px)",
+            opacity: state === "idle" ? 0.7 : 1,
             animation: "reactor-pulse 1.6s ease-in-out infinite",
             mixBlendMode: "screen",
           }}
         />
+
+        {/* Specular highlight that follows tilt */}
         <span
           aria-hidden
-          className="pointer-events-none absolute"
+          className="pointer-events-none absolute inset-0 rounded-full"
           style={{
-            top: "38%",
-            right: "26%",
-            width: "16%",
-            height: "10%",
-            borderRadius: "50%",
-            background: "radial-gradient(circle, var(--hud-cyan-bright) 0%, transparent 70%)",
-            filter: "blur(6px)",
-            opacity: state === "idle" ? 0.55 : 0.95,
-            animation: "reactor-pulse 1.6s ease-in-out infinite",
+            transform: "translateZ(50px)",
+            background: `radial-gradient(circle at ${50 + tilt.y * 2}% ${50 - tilt.x * 2}%, oklch(0.95 0.1 220 / 0.18) 0%, transparent 40%)`,
             mixBlendMode: "screen",
           }}
         />
