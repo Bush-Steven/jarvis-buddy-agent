@@ -10,6 +10,7 @@ import { InputBar } from "./InputBar";
 import { WorldNewsMap } from "./WorldNewsMap";
 import { PermissionsLock, usePermissions } from "./PermissionsLock";
 import { AuditLogPanel, useAuditLog } from "./AuditLog";
+import { SatelliteRadar } from "./SatelliteRadar";
 
 const PC_CONTROL_PATTERNS = [
   /\b(open|launch|run|execute|kill|close|quit)\b.*\b(app|application|program|window|browser|terminal|file|folder)\b/i,
@@ -264,6 +265,7 @@ export function JarvisInterface() {
               modules online: news, search, analysis.
             </p>
           </HudPanel>
+          <SatelliteRadar />
           <AuditLogPanel entries={audit.entries} onClear={audit.clear} />
         </div>
       </div>
