@@ -101,8 +101,21 @@ export function SatelliteRadar() {
   const [observer, setObserver] = useState<Observer>(DEFAULT_OBSERVER);
   const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
   const [statusMsg, setStatusMsg] = useState("Acquiring uplink…");
+  const [alerts, setAlerts] = useState<AlertSettings>(() => loadAlerts());
+  const [showSettings, setShowSettings] = useState(false);
+  const prevElevRef = useRef<Map<string, number>>(new Map());
+  const alertsRef = useRef(alerts);
   const rafRef = useRef<number | null>(null);
   const lastRef = useRef<number>(performance.now());
+
+  useEffect(() => {
+    alertsRef.current = alerts;
+    try {
+      localStorage.setItem(ALERT_KEY, JSON.stringify(alerts));
+    } catch {
+      // ignore
+    }
+  }, [alerts]);
 
   // Try browser geolocation (silent fall-back to London)
   useEffect(() => {
