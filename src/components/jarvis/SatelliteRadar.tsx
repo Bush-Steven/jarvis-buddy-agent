@@ -1,103 +1,160 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as satellite from "satellite.js";
+import { useServerFn } from "@tanstack/react-start";
 import { HudPanel } from "./HudFrame";
+import { fetchActiveTLEs, type TLE } from "@/utils/satellites.functions";
 
-type Contact = {
+type LiveContact = {
   id: string;
-  // Polar coords
-  angle: number; // degrees, 0 = up
-  radius: number; // 0..1 (fraction of radar radius)
-  type: "aircraft" | "satellite" | "vessel" | "unknown";
+  name: string;
+  azimuth: number; // deg, 0=N, clockwise
+  elevation: number; // deg above horizon
+  range: number; // km
   threat: "low" | "medium" | "high";
-  speed: number; // deg/sec orbital drift
-  detectedAt: number; // sweep angle when last lit
-  bornAt: number;
 };
 
-const TYPE_LABEL: Record<Contact["type"], string> = {
-  aircraft: "AIR",
-  satellite: "SAT",
-  vessel: "NAV",
-  unknown: "UNK",
-};
+type Observer = { lat: number; lng: number; alt: number; label: string };
 
-const THREAT_COLOR: Record<Contact["threat"], string> = {
+const THREAT_COLOR: Record<LiveContact["threat"], string> = {
   low: "var(--hud-cyan-bright)",
   medium: "var(--hud-gold-bright)",
   high: "var(--hud-red, oklch(0.7 0.22 25))",
 };
 
-function randomContact(): Contact {
-  const types: Contact["type"][] = ["aircraft", "satellite", "vessel", "unknown"];
-  const threats: Contact["threat"][] = ["low", "low", "low", "medium", "medium", "high"];
-  return {
-    id: Math.random().toString(36).slice(2, 8).toUpperCase(),
-    angle: Math.random() * 360,
-    radius: 0.15 + Math.random() * 0.8,
-    type: types[Math.floor(Math.random() * types.length)],
-    threat: threats[Math.floor(Math.random() * threats.length)],
-    speed: (Math.random() - 0.5) * 8,
-    detectedAt: -1,
-    bornAt: Date.now(),
-  };
+function classifyThreat(name: string): LiveContact["threat"] {
+  const n = name.toUpperCase();
+  if (/COSMOS|KOSMOS|YAOGAN|USA-|NROL|MILSTAR/.test(n)) return "high";
+  if (/STARLINK|ONEWEB|IRIDIUM|GLOBALSTAR/.test(n)) return "medium";
+  return "low";
 }
+
+const DEFAULT_OBSERVER: Observer = {
+  lat: 51.5074,
+  lng: -0.1278,
+  alt: 0.03,
+  label: "LONDON · 51.5N 0.1W",
+};
 
 export function SatelliteRadar() {
   const SIZE = 220;
   const center = SIZE / 2;
   const maxR = SIZE / 2 - 8;
 
-  const [sweep, setSweep] = useState(0); // 0..360
-  const [contacts, setContacts] = useState<Contact[]>(() =>
-    Array.from({ length: 5 }, randomContact)
-  );
+  const fetchTLEs = useServerFn(fetchActiveTLEs);
+
+  const [sweep, setSweep] = useState(0);
+  const [tles, setTles] = useState<TLE[]>([]);
+  const [contacts, setContacts] = useState<LiveContact[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [observer, setObserver] = useState<Observer>(DEFAULT_OBSERVER);
+  const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
+  const [statusMsg, setStatusMsg] = useState("Acquiring uplink…");
   const rafRef = useRef<number | null>(null);
   const lastRef = useRef<number>(performance.now());
+
+  // Try browser geolocation (silent fall-back to London)
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, altitude } = pos.coords;
+        setObserver({
+          lat: latitude,
+          lng: longitude,
+          alt: (altitude ?? 0) / 1000,
+          label: `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`,
+        });
+      },
+      () => {},
+      { timeout: 4000 }
+    );
+  }, []);
+
+  // Fetch TLEs on mount + every 6 hours
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetchTLEs();
+        if (cancelled) return;
+        if (res.error || res.tles.length === 0) {
+          setStatus("error");
+          setStatusMsg(res.error ?? "No TLE data");
+        } else {
+          setTles(res.tles);
+          setStatus("live");
+          setStatusMsg(`${res.tles.length} tracked · Celestrak`);
+        }
+      } catch {
+        if (!cancelled) {
+          setStatus("error");
+          setStatusMsg("Uplink failed");
+        }
+      }
+    };
+    load();
+    const id = setInterval(load, 6 * 60 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [fetchTLEs]);
+
+  // Recompute live look-angles from TLEs (every 2s — propagation is cheap but
+  // we don't need 60Hz for orbital positions)
+  useEffect(() => {
+    if (tles.length === 0) return;
+    const compute = () => {
+      const now = new Date();
+      const obsGd: satellite.GeodeticLocation = {
+        longitude: satellite.degreesToRadians(observer.lng),
+        latitude: satellite.degreesToRadians(observer.lat),
+        height: observer.alt,
+      };
+      const gmst = satellite.gstime(now);
+      const live: LiveContact[] = [];
+      for (const t of tles) {
+        try {
+          const satrec = satellite.twoline2satrec(t.line1, t.line2);
+          const pv = satellite.propagate(satrec, now);
+          if (!pv.position || typeof pv.position === "boolean") continue;
+          const ecf = satellite.eciToEcf(pv.position, gmst);
+          const look = satellite.ecfToLookAngles(obsGd, ecf);
+          const elDeg = satellite.radiansToDegrees(look.elevation);
+          if (elDeg <= 0) continue; // below horizon
+          live.push({
+            id: t.name,
+            name: t.name,
+            azimuth: satellite.radiansToDegrees(look.azimuth),
+            elevation: elDeg,
+            range: look.rangeSat,
+            threat: classifyThreat(t.name),
+          });
+        } catch {
+          // Bad TLE, skip
+        }
+      }
+      // Cap displayed contacts so the scope stays readable
+      live.sort((a, b) => b.elevation - a.elevation);
+      setContacts(live.slice(0, 24));
+    };
+    compute();
+    const id = setInterval(compute, 2000);
+    return () => clearInterval(id);
+  }, [tles, observer]);
 
   // Sweep animation
   useEffect(() => {
     const tick = (now: number) => {
       const dt = (now - lastRef.current) / 1000;
       lastRef.current = now;
-      setSweep((s) => (s + dt * 90) % 360); // 90 deg/sec → 4s/rev
-      setContacts((cs) =>
-        cs.map((c) => ({
-          ...c,
-          angle: (c.angle + c.speed * dt + 360) % 360,
-        }))
-      );
+      setSweep((s) => (s + dt * 90) % 360);
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, []);
-
-  // Light up contacts when sweep passes them
-  useEffect(() => {
-    setContacts((cs) =>
-      cs.map((c) => {
-        const diff = ((sweep - c.angle + 360) % 360);
-        if (diff < 4 && c.detectedAt !== Math.floor(sweep / 4)) {
-          return { ...c, detectedAt: Math.floor(sweep / 4) };
-        }
-        return c;
-      })
-    );
-  }, [sweep]);
-
-  // Periodic contact churn
-  useEffect(() => {
-    const id = setInterval(() => {
-      setContacts((cs) => {
-        const next = cs.filter(() => Math.random() > 0.18);
-        while (next.length < 6) next.push(randomContact());
-        if (next.length > 8) next.length = 8;
-        return next;
-      });
-    }, 4500);
-    return () => clearInterval(id);
   }, []);
 
   const stats = useMemo(() => {
@@ -109,14 +166,28 @@ export function SatelliteRadar() {
   const selectedContact = contacts.find((c) => c.id === selected) ?? null;
 
   return (
-    <HudPanel title="Satellite Radar · Orbital Scan" accent="cyan">
+    <HudPanel title="Satellite Radar · Live Orbital" accent="cyan">
       <div className="space-y-3">
         <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.25em]">
-          <span className="text-muted-foreground">{stats.total} contacts</span>
+          <span className="text-muted-foreground">{stats.total} above horizon</span>
           <div className="flex items-center gap-2">
             <span className="hud-text-gold">{stats.med} med</span>
             <span style={{ color: THREAT_COLOR.high }}>{stats.high} hi</span>
           </div>
+        </div>
+
+        <div
+          className="text-[9px] uppercase tracking-[0.3em] truncate"
+          style={{
+            color:
+              status === "error"
+                ? THREAT_COLOR.high
+                : status === "live"
+                  ? "var(--hud-cyan-bright)"
+                  : "var(--hud-gold-bright)",
+          }}
+        >
+          {observer.label} · {statusMsg}
         </div>
 
         <div className="relative mx-auto" style={{ width: SIZE, height: SIZE }}>
@@ -137,11 +208,9 @@ export function SatelliteRadar() {
               </linearGradient>
             </defs>
 
-            {/* Background disc */}
             <circle cx={center} cy={center} r={maxR} fill="url(#radarBg)" />
 
-            {/* Concentric rings */}
-            {[0.25, 0.5, 0.75, 1].map((f) => (
+            {[0.33, 0.66, 1].map((f) => (
               <circle
                 key={f}
                 cx={center}
@@ -154,23 +223,29 @@ export function SatelliteRadar() {
               />
             ))}
 
-            {/* Crosshair */}
-            <line
-              x1={center}
-              y1={center - maxR}
-              x2={center}
-              y2={center + maxR}
-              stroke="var(--hud-cyan)"
-              strokeOpacity={0.3}
-            />
-            <line
-              x1={center - maxR}
-              y1={center}
-              x2={center + maxR}
-              y2={center}
-              stroke="var(--hud-cyan)"
-              strokeOpacity={0.3}
-            />
+            {/* Cardinal labels — N E S W */}
+            {[
+              { l: "N", x: center, y: 8 },
+              { l: "E", x: SIZE - 6, y: center + 3 },
+              { l: "S", x: center, y: SIZE - 2 },
+              { l: "W", x: 4, y: center + 3 },
+            ].map((p) => (
+              <text
+                key={p.l}
+                x={p.x}
+                y={p.y}
+                fill="var(--hud-cyan)"
+                fontSize={9}
+                textAnchor="middle"
+                fontFamily="monospace"
+                style={{ letterSpacing: "0.1em" }}
+              >
+                {p.l}
+              </text>
+            ))}
+
+            <line x1={center} y1={center - maxR} x2={center} y2={center + maxR} stroke="var(--hud-cyan)" strokeOpacity={0.3} />
+            <line x1={center - maxR} y1={center} x2={center + maxR} y2={center} stroke="var(--hud-cyan)" strokeOpacity={0.3} />
 
             {/* Sweep wedge */}
             <g transform={`rotate(${sweep - 90} ${center} ${center})`}>
@@ -191,14 +266,15 @@ export function SatelliteRadar() {
               />
             </g>
 
-            {/* Contacts */}
+            {/* Live satellites — radius shrinks as elevation → 90 (zenith at center) */}
             {contacts.map((c) => {
-              const rad = (c.angle - 90) * (Math.PI / 180);
-              const x = center + Math.cos(rad) * c.radius * maxR;
-              const y = center + Math.sin(rad) * c.radius * maxR;
-              const diff = (sweep - c.angle + 360) % 360;
-              // Fade based on time since last sweep
-              const intensity = Math.max(0.2, 1 - diff / 360);
+              const r = (1 - c.elevation / 90) * maxR;
+              // Azimuth: 0=N (up), 90=E (right). Convert to SVG: angle from +x axis = az - 90.
+              const rad = (c.azimuth - 90) * (Math.PI / 180);
+              const x = center + Math.cos(rad) * r;
+              const y = center + Math.sin(rad) * r;
+              const sweepDiff = (sweep - c.azimuth + 360) % 360;
+              const intensity = Math.max(0.25, 1 - sweepDiff / 360);
               const color = THREAT_COLOR[c.threat];
               const isSel = selected === c.id;
               return (
@@ -206,23 +282,23 @@ export function SatelliteRadar() {
                   <circle
                     cx={x}
                     cy={y}
-                    r={isSel ? 6 : 3.5}
+                    r={isSel ? 5 : 2.5}
                     fill={color}
                     fillOpacity={intensity}
                     stroke={color}
-                    strokeWidth={isSel ? 2 : 1}
+                    strokeWidth={isSel ? 2 : 0.8}
                     style={{ filter: `drop-shadow(0 0 ${4 * intensity}px ${color})` }}
                   />
                   {(isSel || c.threat === "high") && (
                     <text
-                      x={x + 7}
-                      y={y - 5}
+                      x={x + 6}
+                      y={y - 4}
                       fill={color}
-                      fontSize={8}
+                      fontSize={7.5}
                       fontFamily="monospace"
-                      style={{ letterSpacing: "0.1em" }}
+                      style={{ letterSpacing: "0.05em" }}
                     >
-                      {TYPE_LABEL[c.type]}-{c.id}
+                      {c.name.slice(0, 14)}
                     </text>
                   )}
                 </g>
@@ -231,7 +307,6 @@ export function SatelliteRadar() {
           </svg>
         </div>
 
-        {/* Contact list / details */}
         {selectedContact ? (
           <div
             className="rounded-md border p-2 text-[11px] space-y-1"
@@ -240,12 +315,12 @@ export function SatelliteRadar() {
               background: "oklch(0.18 0.04 235 / 0.5)",
             }}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span
-                className="text-[10px] font-bold uppercase tracking-[0.3em]"
+                className="text-[10px] font-bold uppercase tracking-[0.2em] truncate"
                 style={{ color: THREAT_COLOR[selectedContact.threat] }}
               >
-                {TYPE_LABEL[selectedContact.type]} · {selectedContact.id}
+                {selectedContact.name}
               </span>
               <button
                 onClick={() => setSelected(null)}
@@ -256,13 +331,11 @@ export function SatelliteRadar() {
             </div>
             <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-muted-foreground">
               <span>BEARING</span>
-              <span className="hud-text text-right">
-                {selectedContact.angle.toFixed(0)}°
-              </span>
+              <span className="hud-text text-right">{selectedContact.azimuth.toFixed(1)}°</span>
+              <span>ELEVATION</span>
+              <span className="hud-text text-right">{selectedContact.elevation.toFixed(1)}°</span>
               <span>RANGE</span>
-              <span className="hud-text text-right">
-                {(selectedContact.radius * 1200).toFixed(0)} km
-              </span>
+              <span className="hud-text text-right">{selectedContact.range.toFixed(0)} km</span>
               <span>THREAT</span>
               <span className="text-right" style={{ color: THREAT_COLOR[selectedContact.threat] }}>
                 {selectedContact.threat.toUpperCase()}
@@ -271,7 +344,7 @@ export function SatelliteRadar() {
           </div>
         ) : (
           <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground text-center">
-            Tap a contact for telemetry
+            Tap a contact for live telemetry
           </p>
         )}
       </div>
