@@ -1,8 +1,60 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as satellite from "satellite.js";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { HudPanel } from "./HudFrame";
 import { fetchActiveTLEs, type TLE } from "@/utils/satellites.functions";
+
+type AlertSettings = {
+  enabled: boolean;
+  threshold: number; // deg elevation
+  filter: string; // substring match on satellite name (case-insensitive)
+  sound: boolean;
+};
+
+const ALERT_KEY = "jarvis.radar.alerts.v1";
+const DEFAULT_ALERTS: AlertSettings = {
+  enabled: true,
+  threshold: 10,
+  filter: "",
+  sound: false,
+};
+
+function loadAlerts(): AlertSettings {
+  if (typeof window === "undefined") return DEFAULT_ALERTS;
+  try {
+    const raw = localStorage.getItem(ALERT_KEY);
+    if (!raw) return DEFAULT_ALERTS;
+    return { ...DEFAULT_ALERTS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_ALERTS;
+  }
+}
+
+function beep() {
+  try {
+    const AC =
+      (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext })
+        .AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.3);
+  } catch {
+    // ignore
+  }
+}
+
 
 type LiveContact = {
   id: string;
