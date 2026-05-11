@@ -263,6 +263,14 @@ export function SatelliteRadar() {
           <div className="flex items-center gap-2">
             <span className="hud-text-gold">{stats.med} med</span>
             <span style={{ color: THREAT_COLOR.high }}>{stats.high} hi</span>
+            <button
+              onClick={() => setShowSettings((s) => !s)}
+              className="ml-1 rounded border px-1.5 py-0.5 text-[9px] tracking-[0.2em] hud-text hover:opacity-80"
+              style={{ borderColor: "var(--hud-cyan)" }}
+              aria-label="Alert settings"
+            >
+              {alerts.enabled ? "ALR●" : "ALR○"}
+            </button>
           </div>
         </div>
 
@@ -279,6 +287,60 @@ export function SatelliteRadar() {
         >
           {observer.label} · {statusMsg}
         </div>
+
+        {showSettings && (
+          <div
+            className="rounded-md border p-2 space-y-2 text-[10px]"
+            style={{ borderColor: "var(--hud-cyan)", background: "oklch(0.18 0.04 235 / 0.5)" }}
+          >
+            <label className="flex items-center justify-between gap-2 uppercase tracking-[0.2em]">
+              <span className="hud-text">Alerts</span>
+              <input
+                type="checkbox"
+                checked={alerts.enabled}
+                onChange={(e) => setAlerts((s) => ({ ...s, enabled: e.target.checked }))}
+              />
+            </label>
+            <label className="block uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="flex justify-between">
+                <span>Threshold</span>
+                <span className="hud-text">{alerts.threshold.toFixed(0)}°</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={90}
+                step={1}
+                value={alerts.threshold}
+                onChange={(e) => setAlerts((s) => ({ ...s, threshold: Number(e.target.value) }))}
+                className="w-full accent-[var(--hud-cyan-bright)]"
+              />
+              <div className="text-[8px] text-muted-foreground normal-case tracking-normal">
+                {alerts.threshold === 0 ? "Notify when entering horizon" : `Notify when elevation ≥ ${alerts.threshold}°`}
+              </div>
+            </label>
+            <label className="block uppercase tracking-[0.2em] text-muted-foreground">
+              <span>Name filter</span>
+              <input
+                type="text"
+                placeholder="e.g. ISS, STARLINK"
+                value={alerts.filter}
+                onChange={(e) => setAlerts((s) => ({ ...s, filter: e.target.value }))}
+                className="mt-1 w-full rounded border bg-transparent px-1.5 py-1 text-[10px] hud-text outline-none normal-case tracking-normal"
+                style={{ borderColor: "var(--hud-cyan)" }}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-2 uppercase tracking-[0.2em]">
+              <span className="text-muted-foreground">Audio chirp</span>
+              <input
+                type="checkbox"
+                checked={alerts.sound}
+                onChange={(e) => setAlerts((s) => ({ ...s, sound: e.target.checked }))}
+              />
+            </label>
+          </div>
+        )}
+
 
         <div className="relative mx-auto" style={{ width: SIZE, height: SIZE }}>
           <svg
