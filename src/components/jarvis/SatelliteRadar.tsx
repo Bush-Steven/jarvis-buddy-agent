@@ -199,9 +199,34 @@ export function SatelliteRadar() {
           // Bad TLE, skip
         }
       }
-      // Cap displayed contacts so the scope stays readable
       live.sort((a, b) => b.elevation - a.elevation);
-      setContacts(live.slice(0, 24));
+      const capped = live.slice(0, 24);
+
+      // Alert detection: fire when a sat crosses the threshold upward
+      // (was below threshold or off-scope last tick → now ≥ threshold).
+      const cfg = alertsRef.current;
+      if (cfg.enabled) {
+        const filter = cfg.filter.trim().toLowerCase();
+        for (const c of live) {
+          if (filter && !c.name.toLowerCase().includes(filter)) continue;
+          const prev = prevElevRef.current.get(c.id) ?? -90;
+          if (prev < cfg.threshold && c.elevation >= cfg.threshold) {
+            const label =
+              cfg.threshold <= 0.5
+                ? "entered horizon"
+                : `crossed ${cfg.threshold.toFixed(0)}°`;
+            toast(`📡 ${c.name}`, {
+              description: `${label} · az ${c.azimuth.toFixed(0)}° · el ${c.elevation.toFixed(1)}° · ${c.range.toFixed(0)} km`,
+            });
+            if (cfg.sound) beep();
+          }
+        }
+      }
+      const next = new Map<string, number>();
+      for (const c of live) next.set(c.id, c.elevation);
+      prevElevRef.current = next;
+
+      setContacts(capped);
     };
     compute();
     const id = setInterval(compute, 2000);
