@@ -117,7 +117,7 @@ export function SatelliteRadar() {
   const [observer, setObserver] = useState<Observer>(DEFAULT_OBSERVER);
   const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
   const [statusMsg, setStatusMsg] = useState("Acquiring uplink…");
-  const [alerts, setAlerts] = useState<AlertSettings>(() => loadAlerts());
+  const [alerts, setAlerts] = useState<AlertConfig>(() => loadAlerts());
   const [showSettings, setShowSettings] = useState(false);
   const prevElevRef = useRef<Map<string, number>>(new Map());
   const alertsRef = useRef(alerts);
