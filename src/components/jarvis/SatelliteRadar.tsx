@@ -5,30 +5,46 @@ import { toast } from "sonner";
 import { HudPanel } from "./HudFrame";
 import { fetchActiveTLEs, type TLE } from "@/utils/satellites.functions";
 
-type AlertSettings = {
-  enabled: boolean;
+type AlertRule = {
+  id: string;
+  label: string;
+  filter: string; // substring match on name (case-insensitive). Empty = match any.
   threshold: number; // deg elevation
-  filter: string; // substring match on satellite name (case-insensitive)
   sound: boolean;
+  enabled: boolean;
 };
 
-const ALERT_KEY = "jarvis.radar.alerts.v1";
-const DEFAULT_ALERTS: AlertSettings = {
-  enabled: true,
-  threshold: 10,
-  filter: "",
-  sound: false,
+type AlertConfig = {
+  enabled: boolean; // master switch
+  rules: AlertRule[];
 };
 
-function loadAlerts(): AlertSettings {
+const ALERT_KEY = "jarvis.radar.alerts.v2";
+
+const DEFAULT_RULES: AlertRule[] = [
+  { id: "iss", label: "ISS", filter: "ISS (ZARYA)", threshold: 10, sound: true, enabled: true },
+  { id: "starlink", label: "Starlink", filter: "STARLINK", threshold: 30, sound: false, enabled: true },
+  { id: "military", label: "Military", filter: "COSMOS", threshold: 5, sound: true, enabled: true },
+  { id: "any", label: "Any", filter: "", threshold: 60, sound: false, enabled: false },
+];
+
+const DEFAULT_ALERTS: AlertConfig = { enabled: true, rules: DEFAULT_RULES };
+
+function loadAlerts(): AlertConfig {
   if (typeof window === "undefined") return DEFAULT_ALERTS;
   try {
     const raw = localStorage.getItem(ALERT_KEY);
     if (!raw) return DEFAULT_ALERTS;
-    return { ...DEFAULT_ALERTS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.rules)) return DEFAULT_ALERTS;
+    return { enabled: !!parsed.enabled, rules: parsed.rules as AlertRule[] };
   } catch {
     return DEFAULT_ALERTS;
   }
+}
+
+function newRuleId() {
+  return `r_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function beep() {
