@@ -218,29 +218,35 @@ export function SatelliteRadar() {
       live.sort((a, b) => b.elevation - a.elevation);
       const capped = live.slice(0, 24);
 
-      // Alert detection: fire when a sat crosses the threshold upward
-      // (was below threshold or off-scope last tick → now ≥ threshold).
+      // Alert detection: per-rule, fire when a sat crosses that rule's
+      // threshold upward since last tick.
       const cfg = alertsRef.current;
       if (cfg.enabled) {
-        const filter = cfg.filter.trim().toLowerCase();
-        for (const c of live) {
-          if (filter && !c.name.toLowerCase().includes(filter)) continue;
-          const prev = prevElevRef.current.get(c.id) ?? -90;
-          if (prev < cfg.threshold && c.elevation >= cfg.threshold) {
-            const label =
-              cfg.threshold <= 0.5
-                ? "entered horizon"
-                : `crossed ${cfg.threshold.toFixed(0)}°`;
-            toast(`📡 ${c.name}`, {
-              description: `${label} · az ${c.azimuth.toFixed(0)}° · el ${c.elevation.toFixed(1)}° · ${c.range.toFixed(0)} km`,
-            });
-            if (cfg.sound) beep();
+        const nextPrev = new Map<string, number>();
+        for (const rule of cfg.rules) {
+          if (!rule.enabled) continue;
+          const filter = rule.filter.trim().toLowerCase();
+          for (const c of live) {
+            if (filter && !c.name.toLowerCase().includes(filter)) continue;
+            const key = `${rule.id}|${c.id}`;
+            const prev = prevElevRef.current.get(key) ?? -90;
+            if (prev < rule.threshold && c.elevation >= rule.threshold) {
+              const label =
+                rule.threshold <= 0.5
+                  ? "entered horizon"
+                  : `crossed ${rule.threshold.toFixed(0)}°`;
+              toast(`📡 [${rule.label}] ${c.name}`, {
+                description: `${label} · az ${c.azimuth.toFixed(0)}° · el ${c.elevation.toFixed(1)}° · ${c.range.toFixed(0)} km`,
+              });
+              if (rule.sound) beep();
+            }
+            nextPrev.set(key, c.elevation);
           }
         }
+        prevElevRef.current = nextPrev;
+      } else {
+        prevElevRef.current = new Map();
       }
-      const next = new Map<string, number>();
-      for (const c of live) next.set(c.id, c.elevation);
-      prevElevRef.current = next;
 
       setContacts(capped);
     };
